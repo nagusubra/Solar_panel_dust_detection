@@ -1,0 +1,2257 @@
+{
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/nagusubra/Solar_panel_dust_detection/blob/main/Solar_panel_dust_detection_main.ipynb%20-%20Success%202\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "SQAMdUOp9lRn"
+      },
+      "source": [
+        "#Install libraries and modules"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 1,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "PLxJiY6u9Zh0",
+        "outputId": "fbfbd4b0-cf28-4c72-aa8f-4f3dc71939df"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\u001b[2K     \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m240.6/240.6 kB\u001b[0m \u001b[31m20.8 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[2K     \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m17.3/17.3 MB\u001b[0m \u001b[31m87.9 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[?25h\u001b[31mERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.\n",
+            "tensorflow 2.12.0 requires numpy<1.24,>=1.22, but you have numpy 1.24.2 which is incompatible.\n",
+            "numba 0.56.4 requires numpy<1.24,>=1.18, but you have numpy 1.24.2 which is incompatible.\u001b[0m\u001b[31m\n",
+            "\u001b[0mLooking in indexes: https://pypi.org/simple, https://us-python.pkg.dev/colab-wheels/public/simple/\n",
+            "Requirement already satisfied: openpyxl in /usr/local/lib/python3.9/dist-packages (3.0.10)\n",
+            "Requirement already satisfied: et-xmlfile in /usr/local/lib/python3.9/dist-packages (from openpyxl) (1.1.0)\n",
+            "Looking in indexes: https://pypi.org/simple, https://us-python.pkg.dev/colab-wheels/public/simple/\n",
+            "Collecting xlsxwriter\n",
+            "  Downloading XlsxWriter-3.0.9-py3-none-any.whl (152 kB)\n",
+            "\u001b[2K     \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m152.8/152.8 kB\u001b[0m \u001b[31m17.5 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[?25hInstalling collected packages: xlsxwriter\n",
+            "Successfully installed xlsxwriter-3.0.9\n"
+          ]
+        }
+      ],
+      "source": [
+        "!pip install -q tensorflow-model-optimization\n",
+        "!pip install openpyxl\n",
+        "!pip install xlsxwriter\n",
+        "\n",
+        "import xlsxwriter\n",
+        "import openpyxl\n",
+        "from openpyxl import Workbook\n",
+        "from openpyxl.drawing.image import Image\n",
+        "\n",
+        "import tempfile\n",
+        "from tensorflow import keras\n",
+        "import tensorflow_model_optimization as tfmot\n",
+        "\n",
+        "from tqdm import tqdm_notebook as tqdm\n",
+        "import os\n",
+        "import time\n",
+        "import pickle\n",
+        "from matplotlib import pyplot as plt\n",
+        "import numpy as np\n",
+        "import pandas as pd\n",
+        "import tensorflow as tf\n",
+        "from tensorflow.keras import datasets, layers, models\n",
+        "import matplotlib.pyplot as plt"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 2,
+      "metadata": {
+        "id": "qeqtoyTCppFF"
+      },
+      "outputs": [],
+      "source": [
+        "import tensorflow as tf\n",
+        "from tensorflow.keras.models import Model, load_model\n",
+        "from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, Dense, Flatten, BatchNormalization, Dropout\n",
+        "from tensorflow.keras.preprocessing import image_dataset_from_directory\n",
+        "from tensorflow.keras.optimizers import Adam, SGD\n",
+        "from tensorflow.keras.utils import plot_model\n",
+        "from tensorflow.keras.losses import binary_crossentropy\n",
+        "import tensorflow_datasets as tfds\n",
+        "import zipfile"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 3,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "-WVnbwh-9x2l",
+        "outputId": "8a2f8204-8729-4278-f741-1670ddb2b836"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Mounted at /content/drive\n"
+          ]
+        }
+      ],
+      "source": [
+        "# mounting google drive (if you are using Colab)\n",
+        "from google.colab import drive\n",
+        "drive.mount('/content/drive')"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "YjpFrB77S6QU"
+      },
+      "source": [
+        "# Evaluation function"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": 27,
+      "metadata": {
+        "id": "oB55zL05S_Oe"
+      },
+      "outputs": [],
+      "source": [
+        "# Evaluate Model Size\n",
+        "def get_gzipped_model_size(file):\n",
+        "  # Returns size of gzipped model, in bytes.\n",
+        "\n",
+        "  _, zipped_file = tempfile.mkstemp('.zip')\n",
+        "  with zipfile.ZipFile(zipped_file, 'w', compression=zipfile.ZIP_DEFLATED) as f:\n",
+        "    f.write(file)\n",
+        "  return os.path.getsize(zipped_file)\n",
+        "\n",
+        "\n",
+        "def evaluate_model(model_path, model_info, val_dataset):\n",
+        "\n",
+        "  # Evaluate test accuracy and test loss\n",
+        "  model = tf.keras.models.load_model(model_path)\n",
+        "  test_loss, test_acc = model.evaluate(val_dataset, verbose=0)\n",
+        "\n",
+        "  # Evaluate Model Size\n",
+        "  model_size = get_gzipped_model_size(model_path)\n",
+        "\n",
+        "  # Evaluate Inference Time\n",
+        "  startTime = time.time()\n",
+        "  prediction = model.predict(val_dataset)\n",
+        "  executionTime = (time.time() - startTime)/len(val_dataset)\n",
+        "\n",
+        "  # Print\n",
+        "  print('\\nModel Accuracy:', test_acc*100, '%')\n",
+        "  print(\"Model Size: %.2f bytes\" % (model_size))\n",
+        "  print(\"Inference Time is: \", executionTime, \"s\")\n",
+        "\n",
+        "  # Build Evalution dataframe\n",
+        "  evulation_dict = {\n",
+        "                      \"Evaluation type\": \"Evualation\",\n",
+        "                      \"Model Information\": model_info,\n",
+        "                      \"Accuracy\": str(test_acc*100) + \" %\",\n",
+        "                      \"Loss\": str(test_loss*100) + \" %\",\n",
+        "                      \"Model Size\": str(model_size) + \" bytes\",\n",
+        "                      \"Inference Time\": str(executionTime) + \" sec\"\n",
+        "                    }\n",
+        "  \n",
+        "  evulation_df = pd.DataFrame.from_dict(evulation_dict, orient='index').reset_index()\n",
+        "\n",
+        "\n",
+        "  return test_acc, model_size, executionTime, evulation_df\n",
+        "\n",
+        "\n",
+        "def evaluate_model_without_saving_stats(model, model_path, model_info, val_dataset):\n",
+        "\n",
+        "  # Evaluate test accuracy and test loss\n",
+        "  # model = tf.keras.models.load_model(model_path)\n",
+        "  test_loss, test_acc = model.evaluate(val_dataset, verbose=0)\n",
+        "\n",
+        "  # Evaluate Model Size\n",
+        "  model_size = get_gzipped_model_size(model_path)\n",
+        "\n",
+        "  # Evaluate Inference Time\n",
+        "  startTime = time.time()\n",
+        "  prediction = model.predict(val_dataset)\n",
+        "  executionTime = (time.time() - startTime)/len(val_dataset)\n",
+        "\n",
+        "  # Print\n",
+        "  print('\\nModel Accuracy:', test_acc*100, '%')\n",
+        "  print(\"Model Size: %.2f bytes\" % (model_size))\n",
+        "  print(\"Inference Time is: \", executionTime, \"s\")\n",
+        "\n",
+        "  # Build Evalution dataframe\n",
+        "  evulation_dict = {\n",
+        "                      \"Evaluation type\": \"Evualation\",\n",
+        "                      \"Model Information\": model_info,\n",
+        "                      \"Accuracy\": str(test_acc*100) + \" %\",\n",
+        "                      \"Loss\": str(test_loss*100) + \" %\",\n",
+        "                      \"Model Size\": str(float(model_size)/10**6) + \" Mega bytes\", # we want mega bytes\n",
+        "                      \"Inference Time\": str(executionTime) + \" sec\"\n",
+        "                    }\n",
+        "  \n",
+        "  evulation_df = pd.DataFrame.from_dict(evulation_dict, orient='index').reset_index()\n",
+        "\n",
+        "\n",
+        "  return test_acc, model_size, executionTime, evulation_df\n",
+        "\n",
+        "\n",
+        "\n",
+        "\n",
+        "# research paper evaluation function\n",
+        "def evaluate_research_paper_with_model_path(model_path):\n",
+        "  # model_path = \"/content/models/solnet.hdf5\"\n",
+        "  solnet = load_model(model_path, compile=False)\n",
+        "  history = solnet.history()\n",
+        "  plt.plot(history.history['loss'])\n",
+        "  plt.plot(history.history['acc'])\n",
+        "  plt.title('acc loss vs epoch')\n",
+        "  plt.xlabel('epoch')\n",
+        "  plt.legend(['loss', 'acc'], loc='upper left')\n",
+        "  plt.show()\n",
+        "\n",
+        "def evaluate_research_paper_with_model(model):\n",
+        "  history = model.history()\n",
+        "  plt.plot(history.history['loss'])\n",
+        "  plt.plot(history.history['acc'])\n",
+        "  plt.title('acc loss vs epoch')\n",
+        "  plt.xlabel('epoch')\n",
+        "  plt.legend(['loss', 'acc'], loc='upper left')\n",
+        "  plt.show()"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "def iterative_pruning(model, initial_sparsity, final_sparsity, begin_step, end_step, tdata_loader,vdata_loader, epochs):\n",
+        "  prune_low_magnitude = tfmot.sparsity.keras.prune_low_magnitude\n",
+        "\n",
+        "  # Define model for pruning.\n",
+        "  pruning_params = {\n",
+        "      'pruning_schedule': tfmot.sparsity.keras.PolynomialDecay(initial_sparsity=initial_sparsity,\n",
+        "          final_sparsity=final_sparsity, begin_step=begin_step, end_step=end_step, frequency=100)\n",
+        "  }\n",
+        "\n",
+        "  pruned_model = prune_low_magnitude(model, **pruning_params)\n",
+        "\n",
+        "  # `prune_low_magnitude` requires a recompile.\n",
+        "  optimizer = tf.keras.optimizers.Adam(learning_rate=1e-5)\n",
+        "  pruned_model.compile(optimizer=Adam(.0001, .8, .9),\n",
+        "      loss=binary_crossentropy,\n",
+        "      metrics=['accuracy'])\n",
+        "\n",
+        "  callbacks = [\n",
+        "      tfmot.sparsity.keras.UpdatePruningStep(),\n",
+        "  ]\n",
+        "\n",
+        "  pruned_model.fit(tdata_loader, epochs=epochs, validation_data=vdata_loader, callbacks=callbacks)\n",
+        "\n",
+        "  # Strip pruning wrappers\n",
+        "  stripped_pruned_model = tfmot.sparsity.keras.strip_pruning(pruned_model)\n",
+        "\n",
+        "  return pruned_model, stripped_pruned_model"
+      ],
+      "metadata": {
+        "id": "chNX2fP2qZe7"
+      },
+      "execution_count": 5,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "def print_model_weights_sparsity(model):\n",
+        "\n",
+        "    for layer in model.layers:\n",
+        "        if isinstance(layer, tf.keras.layers.Wrapper):\n",
+        "            weights = layer.trainable_weights\n",
+        "        else:\n",
+        "            weights = layer.weights\n",
+        "        for weight in weights:\n",
+        "            if \"kernel\" not in weight.name or \"centroid\" in weight.name:\n",
+        "                continue\n",
+        "            weight_size = weight.numpy().size\n",
+        "            zero_num = np.count_nonzero(weight == 0)\n",
+        "            print(\n",
+        "                f\"{weight.name}: {zero_num/weight_size:.2%} sparsity \",\n",
+        "                f\"({zero_num}/{weight_size})\",\n",
+        "            )"
+      ],
+      "metadata": {
+        "id": "SCpeLVkCksEu"
+      },
+      "execution_count": 6,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Load data"
+      ],
+      "metadata": {
+        "id": "-X_8C-1ukM7P"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "batch_size = 32\n",
+        "#location = 'dataset/'\n",
+        "location = \"/content/drive/MyDrive/Solar_panel_dust_detection/dataset_1\"\n",
+        "label_mode = 'binary'\n",
+        "seed = 10 #changed for each fold made manually\n",
+        "\n",
+        "class_names = ['clean', 'dirty']\n",
+        "in_size = [227, 227, 3]\n",
+        "\n",
+        "tr_dataset = image_dataset_from_directory(directory=location, label_mode= label_mode, class_names=class_names,\n",
+        "                                          seed=seed, labels='inferred', image_size=in_size[:-1], \n",
+        "                                          subset = 'training', batch_size=batch_size, validation_split=.2)\n",
+        "\n",
+        "val_dataset = image_dataset_from_directory(directory=location, label_mode= label_mode, class_names=class_names,\n",
+        "                                          seed=seed, labels='inferred', image_size=in_size[:-1],\n",
+        "                                          subset = 'validation', batch_size=batch_size, validation_split=.2)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "P5QDb8c7kQxu",
+        "outputId": "5c084e17-0433-46f9-eced-57663bc30b99"
+      },
+      "execution_count": 7,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Found 1440 files belonging to 2 classes.\n",
+            "Using 1152 files for training.\n",
+            "Found 1440 files belonging to 2 classes.\n",
+            "Using 288 files for validation.\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Load base model and Evaluate\n"
+      ],
+      "metadata": {
+        "id": "LSh8r6pSvbTb"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "base_model_path = '/content/drive/MyDrive/Solar_panel_dust_detection/final_base_model/final_base_model.h5'\n",
+        "base_model = tf.keras.models.load_model(base_model_path)"
+      ],
+      "metadata": {
+        "id": "PxxCx3C9vetW"
+      },
+      "execution_count": 8,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "base_model_test_acc, base_model_model_size, base_model_executionTime, base_model_evulation_df = evaluate_model_without_saving_stats(base_model, base_model_path, \"#0\", val_dataset)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "aV4ptHfowaOW",
+        "outputId": "6eb7ccc7-dad5-485c-9b21-feb1880ae8ff"
+      },
+      "execution_count": 29,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "9/9 [==============================] - 28s 41ms/step\n",
+            "\n",
+            "Model Accuracy: 82.63888955116272 %\n",
+            "Model Size: 647985790.00 bytes\n",
+            "Inference Time is:  4.551086213853624 s\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "base_model_evulation_df"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 238
+        },
+        "id": "4fTy3GU83zDO",
+        "outputId": "c9baa6e1-ad92-4807-8bdb-e134d365112c"
+      },
+      "execution_count": 30,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "               index                      0\n",
+              "0    Evaluation type             Evualation\n",
+              "1  Model Information                     #0\n",
+              "2           Accuracy    82.63888955116272 %\n",
+              "3               Loss    90.77435731887817 %\n",
+              "4         Model Size   647.98579 Mega bytes\n",
+              "5     Inference Time  4.551086213853624 sec"
+            ],
+            "text/html": [
+              "\n",
+              "  <div id=\"df-61eb42a0-dcac-427d-9a3d-130107635360\">\n",
+              "    <div class=\"colab-df-container\">\n",
+              "      <div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>index</th>\n",
+              "      <th>0</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>Evaluation type</td>\n",
+              "      <td>Evualation</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>Model Information</td>\n",
+              "      <td>#0</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>Accuracy</td>\n",
+              "      <td>82.63888955116272 %</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>Loss</td>\n",
+              "      <td>90.77435731887817 %</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>4</th>\n",
+              "      <td>Model Size</td>\n",
+              "      <td>647.98579 Mega bytes</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>5</th>\n",
+              "      <td>Inference Time</td>\n",
+              "      <td>4.551086213853624 sec</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>\n",
+              "      <button class=\"colab-df-convert\" onclick=\"convertToInteractive('df-61eb42a0-dcac-427d-9a3d-130107635360')\"\n",
+              "              title=\"Convert this dataframe to an interactive table.\"\n",
+              "              style=\"display:none;\">\n",
+              "        \n",
+              "  <svg xmlns=\"http://www.w3.org/2000/svg\" height=\"24px\"viewBox=\"0 0 24 24\"\n",
+              "       width=\"24px\">\n",
+              "    <path d=\"M0 0h24v24H0V0z\" fill=\"none\"/>\n",
+              "    <path d=\"M18.56 5.44l.94 2.06.94-2.06 2.06-.94-2.06-.94-.94-2.06-.94 2.06-2.06.94zm-11 1L8.5 8.5l.94-2.06 2.06-.94-2.06-.94L8.5 2.5l-.94 2.06-2.06.94zm10 10l.94 2.06.94-2.06 2.06-.94-2.06-.94-.94-2.06-.94 2.06-2.06.94z\"/><path d=\"M17.41 7.96l-1.37-1.37c-.4-.4-.92-.59-1.43-.59-.52 0-1.04.2-1.43.59L10.3 9.45l-7.72 7.72c-.78.78-.78 2.05 0 2.83L4 21.41c.39.39.9.59 1.41.59.51 0 1.02-.2 1.41-.59l7.78-7.78 2.81-2.81c.8-.78.8-2.07 0-2.86zM5.41 20L4 18.59l7.72-7.72 1.47 1.35L5.41 20z\"/>\n",
+              "  </svg>\n",
+              "      </button>\n",
+              "      \n",
+              "  <style>\n",
+              "    .colab-df-container {\n",
+              "      display:flex;\n",
+              "      flex-wrap:wrap;\n",
+              "      gap: 12px;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-convert {\n",
+              "      background-color: #E8F0FE;\n",
+              "      border: none;\n",
+              "      border-radius: 50%;\n",
+              "      cursor: pointer;\n",
+              "      display: none;\n",
+              "      fill: #1967D2;\n",
+              "      height: 32px;\n",
+              "      padding: 0 0 0 0;\n",
+              "      width: 32px;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-convert:hover {\n",
+              "      background-color: #E2EBFA;\n",
+              "      box-shadow: 0px 1px 2px rgba(60, 64, 67, 0.3), 0px 1px 3px 1px rgba(60, 64, 67, 0.15);\n",
+              "      fill: #174EA6;\n",
+              "    }\n",
+              "\n",
+              "    [theme=dark] .colab-df-convert {\n",
+              "      background-color: #3B4455;\n",
+              "      fill: #D2E3FC;\n",
+              "    }\n",
+              "\n",
+              "    [theme=dark] .colab-df-convert:hover {\n",
+              "      background-color: #434B5C;\n",
+              "      box-shadow: 0px 1px 3px 1px rgba(0, 0, 0, 0.15);\n",
+              "      filter: drop-shadow(0px 1px 2px rgba(0, 0, 0, 0.3));\n",
+              "      fill: #FFFFFF;\n",
+              "    }\n",
+              "  </style>\n",
+              "\n",
+              "      <script>\n",
+              "        const buttonEl =\n",
+              "          document.querySelector('#df-61eb42a0-dcac-427d-9a3d-130107635360 button.colab-df-convert');\n",
+              "        buttonEl.style.display =\n",
+              "          google.colab.kernel.accessAllowed ? 'block' : 'none';\n",
+              "\n",
+              "        async function convertToInteractive(key) {\n",
+              "          const element = document.querySelector('#df-61eb42a0-dcac-427d-9a3d-130107635360');\n",
+              "          const dataTable =\n",
+              "            await google.colab.kernel.invokeFunction('convertToInteractive',\n",
+              "                                                     [key], {});\n",
+              "          if (!dataTable) return;\n",
+              "\n",
+              "          const docLinkHtml = 'Like what you see? Visit the ' +\n",
+              "            '<a target=\"_blank\" href=https://colab.research.google.com/notebooks/data_table.ipynb>data table notebook</a>'\n",
+              "            + ' to learn more about interactive tables.';\n",
+              "          element.innerHTML = '';\n",
+              "          dataTable['output_type'] = 'display_data';\n",
+              "          await google.colab.output.renderOutput(dataTable, element);\n",
+              "          const docLink = document.createElement('div');\n",
+              "          docLink.innerHTML = docLinkHtml;\n",
+              "          element.appendChild(docLink);\n",
+              "        }\n",
+              "      </script>\n",
+              "    </div>\n",
+              "  </div>\n",
+              "  "
+            ]
+          },
+          "metadata": {},
+          "execution_count": 30
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Load iteratively pruned model and Evaluate"
+      ],
+      "metadata": {
+        "id": "rdzYIKsCj6Hd"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "m1uiOPNM0ueQ"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Iteratively prune model and Evaluate"
+      ],
+      "metadata": {
+        "id": "WXdUVrbKq93n"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# frquency = 100\n",
+        "# target sparsity = 70%\n",
+        "# sparisty for each pruning tep = 70%/100 = 0.07%\n",
+        "# Total Number of Training Samples = 1440\n",
+        "# batch size = 32\n",
+        "# epochs = 10\n",
+        "\n",
+        "# possible start and end for the iterative pruning schedule\n",
+        "# Number of learning steps = (1440/32)*10 = 450 (45, 400)\n",
+        "# Number of learning steps = (1440/32)*20 = 900 (90, 800)\n",
+        "# Number of learning steps = (1440/32)*25 = 1125 (110, 1010) -> chosen epoch of 25 epochs\n",
+        "# Number of learning steps = (1440/32)*30 = 1350 (135, 1200)\n",
+        "# Number of learning steps = (1440/32)*35 = 1575 (150, 1400)\n",
+        "\n",
+        "# iterative_pruning(\n",
+        "                  #     model, \n",
+        "                  #     initial_sparsity = 0, \n",
+        "                  #     final_sparsity   = 0.7, \n",
+        "                  #     begin_step       = 0, 110  (~10% of 5625) # pruning early on the pruning schedule to get optimal model size\n",
+        "                  #     end_step         = ?, 1010 (~80% of 5625) # pruning only till 80% so that model can still have enough leanring steps to learn and build networks for the data\n",
+        "                  #     train_images, \n",
+        "                  #     train_labels, \n",
+        "                  #     epochs           = 3, no change ? since the Number of Steps per Epoch = (Total Number of Training Samples = ?) / (Batch Size = ?) \n",
+        "                  # )\n",
+        "\n",
+        "iteratively_pruned_model, iteratively_pruned_stripped_model = iterative_pruning(base_model, 0, 0.7, 110, 1010, tr_dataset, val_dataset, 25)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "TKrwkMAvq9Ka",
+        "outputId": "dbcea257-a546-4a97-f56d-a02e4425db43"
+      },
+      "execution_count": 12,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Epoch 1/25\n",
+            "36/36 [==============================] - 401s 8s/step - loss: 0.6449 - accuracy: 0.8889 - val_loss: 2.1044 - val_accuracy: 0.7465\n",
+            "Epoch 2/25\n",
+            "36/36 [==============================] - 119s 3s/step - loss: 0.4476 - accuracy: 0.9175 - val_loss: 0.6670 - val_accuracy: 0.8924\n",
+            "Epoch 3/25\n",
+            "36/36 [==============================] - 118s 3s/step - loss: 0.4908 - accuracy: 0.9236 - val_loss: 0.7264 - val_accuracy: 0.8785\n",
+            "Epoch 4/25\n",
+            "36/36 [==============================] - 119s 3s/step - loss: 0.3057 - accuracy: 0.9462 - val_loss: 1.6300 - val_accuracy: 0.8194\n",
+            "Epoch 5/25\n",
+            "36/36 [==============================] - 121s 3s/step - loss: 0.3212 - accuracy: 0.9384 - val_loss: 15.3121 - val_accuracy: 0.5729\n",
+            "Epoch 6/25\n",
+            "36/36 [==============================] - 139s 3s/step - loss: 0.3207 - accuracy: 0.9323 - val_loss: 2.5873 - val_accuracy: 0.6424\n",
+            "Epoch 7/25\n",
+            "36/36 [==============================] - 121s 3s/step - loss: 0.1344 - accuracy: 0.9601 - val_loss: 1.3414 - val_accuracy: 0.8160\n",
+            "Epoch 8/25\n",
+            "36/36 [==============================] - 122s 3s/step - loss: 0.1364 - accuracy: 0.9670 - val_loss: 0.2198 - val_accuracy: 0.9514\n",
+            "Epoch 9/25\n",
+            "36/36 [==============================] - 122s 3s/step - loss: 0.1117 - accuracy: 0.9774 - val_loss: 0.2892 - val_accuracy: 0.9306\n",
+            "Epoch 10/25\n",
+            "36/36 [==============================] - 122s 3s/step - loss: 0.1679 - accuracy: 0.9705 - val_loss: 1.3167 - val_accuracy: 0.8368\n",
+            "Epoch 11/25\n",
+            "36/36 [==============================] - 119s 3s/step - loss: 0.0723 - accuracy: 0.9809 - val_loss: 1.9659 - val_accuracy: 0.7535\n",
+            "Epoch 12/25\n",
+            "36/36 [==============================] - 122s 3s/step - loss: 0.2272 - accuracy: 0.9644 - val_loss: 0.9522 - val_accuracy: 0.8021\n",
+            "Epoch 13/25\n",
+            "36/36 [==============================] - 123s 3s/step - loss: 0.0333 - accuracy: 0.9905 - val_loss: 6.2235 - val_accuracy: 0.6458\n",
+            "Epoch 14/25\n",
+            "36/36 [==============================] - 130s 3s/step - loss: 0.0884 - accuracy: 0.9792 - val_loss: 0.1973 - val_accuracy: 0.9618\n",
+            "Epoch 15/25\n",
+            "36/36 [==============================] - 109s 3s/step - loss: 0.1245 - accuracy: 0.9740 - val_loss: 0.1817 - val_accuracy: 0.9514\n",
+            "Epoch 16/25\n",
+            "36/36 [==============================] - 112s 3s/step - loss: 0.1003 - accuracy: 0.9800 - val_loss: 0.2249 - val_accuracy: 0.9306\n",
+            "Epoch 17/25\n",
+            "36/36 [==============================] - 115s 3s/step - loss: 0.1306 - accuracy: 0.9748 - val_loss: 4.9733 - val_accuracy: 0.5868\n",
+            "Epoch 18/25\n",
+            "36/36 [==============================] - 116s 3s/step - loss: 0.1626 - accuracy: 0.9766 - val_loss: 2.0778 - val_accuracy: 0.7118\n",
+            "Epoch 19/25\n",
+            "36/36 [==============================] - 112s 3s/step - loss: 0.0476 - accuracy: 0.9896 - val_loss: 0.2631 - val_accuracy: 0.9549\n",
+            "Epoch 20/25\n",
+            "36/36 [==============================] - 110s 3s/step - loss: 0.2196 - accuracy: 0.9740 - val_loss: 1.2723 - val_accuracy: 0.8021\n",
+            "Epoch 21/25\n",
+            "36/36 [==============================] - 113s 3s/step - loss: 0.1029 - accuracy: 0.9792 - val_loss: 0.5846 - val_accuracy: 0.9097\n",
+            "Epoch 22/25\n",
+            "36/36 [==============================] - 113s 3s/step - loss: 0.0181 - accuracy: 0.9913 - val_loss: 1.7569 - val_accuracy: 0.7778\n",
+            "Epoch 23/25\n",
+            "36/36 [==============================] - 116s 3s/step - loss: 0.2080 - accuracy: 0.9644 - val_loss: 0.7006 - val_accuracy: 0.8750\n",
+            "Epoch 24/25\n",
+            "36/36 [==============================] - 131s 3s/step - loss: 0.0365 - accuracy: 0.9913 - val_loss: 0.6671 - val_accuracy: 0.8646\n",
+            "Epoch 25/25\n",
+            "36/36 [==============================] - 116s 3s/step - loss: 0.0133 - accuracy: 0.9957 - val_loss: 0.9077 - val_accuracy: 0.8264\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "iteratively_pruned_model_path = \"iteratively_pruned_model.h5\"\n",
+        "iteratively_pruned_stripped_model.save(iteratively_pruned_model_path)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "njz48R430wxw",
+        "outputId": "9f8f4f35-83fa-4bb4-c2c5-ae4b41ac98fa"
+      },
+      "execution_count": 14,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "WARNING:tensorflow:Compiled the loaded model, but the compiled metrics have yet to be built. `model.compile_metrics` will be empty until you train or evaluate the model.\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "pruned_test_acc, pruned_model_size, pruned_executionTime, pruned_evulation_df = evaluate_model_without_saving_stats(iteratively_pruned_model, iteratively_pruned_model_path, \"#1\", val_dataset)"
+      ],
+      "metadata": {
+        "id": "-ECvSNb-jWRt",
+        "outputId": "6acafea6-ee71-41d6-f7b7-36f5d5bd834f",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        }
+      },
+      "execution_count": 31,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "9/9 [==============================] - 30s 38ms/step\n",
+            "\n",
+            "Model Accuracy: 82.63888955116272 %\n",
+            "Model Size: 89667501.00 bytes\n",
+            "Inference Time is:  3.28664059109158 s\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print_model_weights_sparsity(iteratively_pruned_model)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "xevKRBmB09O5",
+        "outputId": "9d3975ba-37d6-49ac-92e5-71ff06f10a9b"
+      },
+      "execution_count": 18,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "conv2d/kernel:0: 69.23% sparsity  (24126/34848)\n",
+            "conv2d_1/kernel:0: 69.23% sparsity  (425360/614400)\n",
+            "conv2d_2/kernel:0: 69.23% sparsity  (612519/884736)\n",
+            "conv2d_3/kernel:0: 69.23% sparsity  (918778/1327104)\n",
+            "conv2d_4/kernel:0: 69.23% sparsity  (612519/884736)\n",
+            "dense/kernel:0: 69.23% sparsity  (26134137/37748736)\n",
+            "dense_1/kernel:0: 69.23% sparsity  (11615172/16777216)\n",
+            "dense_2/kernel:0: 69.24% sparsity  (2836/4096)\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "pruned_evulation_df"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 238
+        },
+        "id": "uBvDMVB2mkV7",
+        "outputId": "918ada09-d41d-4bcc-c237-6759fadacf61"
+      },
+      "execution_count": 32,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "               index                     0\n",
+              "0    Evaluation type            Evualation\n",
+              "1  Model Information                    #1\n",
+              "2           Accuracy   82.63888955116272 %\n",
+              "3               Loss   90.77434539794922 %\n",
+              "4         Model Size  89.667501 Mega bytes\n",
+              "5     Inference Time  3.28664059109158 sec"
+            ],
+            "text/html": [
+              "\n",
+              "  <div id=\"df-e88a1279-1896-4e5a-8ac3-b4ad89ef26d6\">\n",
+              "    <div class=\"colab-df-container\">\n",
+              "      <div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>index</th>\n",
+              "      <th>0</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>Evaluation type</td>\n",
+              "      <td>Evualation</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>Model Information</td>\n",
+              "      <td>#1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>Accuracy</td>\n",
+              "      <td>82.63888955116272 %</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>Loss</td>\n",
+              "      <td>90.77434539794922 %</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>4</th>\n",
+              "      <td>Model Size</td>\n",
+              "      <td>89.667501 Mega bytes</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>5</th>\n",
+              "      <td>Inference Time</td>\n",
+              "      <td>3.28664059109158 sec</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>\n",
+              "      <button class=\"colab-df-convert\" onclick=\"convertToInteractive('df-e88a1279-1896-4e5a-8ac3-b4ad89ef26d6')\"\n",
+              "              title=\"Convert this dataframe to an interactive table.\"\n",
+              "              style=\"display:none;\">\n",
+              "        \n",
+              "  <svg xmlns=\"http://www.w3.org/2000/svg\" height=\"24px\"viewBox=\"0 0 24 24\"\n",
+              "       width=\"24px\">\n",
+              "    <path d=\"M0 0h24v24H0V0z\" fill=\"none\"/>\n",
+              "    <path d=\"M18.56 5.44l.94 2.06.94-2.06 2.06-.94-2.06-.94-.94-2.06-.94 2.06-2.06.94zm-11 1L8.5 8.5l.94-2.06 2.06-.94-2.06-.94L8.5 2.5l-.94 2.06-2.06.94zm10 10l.94 2.06.94-2.06 2.06-.94-2.06-.94-.94-2.06-.94 2.06-2.06.94z\"/><path d=\"M17.41 7.96l-1.37-1.37c-.4-.4-.92-.59-1.43-.59-.52 0-1.04.2-1.43.59L10.3 9.45l-7.72 7.72c-.78.78-.78 2.05 0 2.83L4 21.41c.39.39.9.59 1.41.59.51 0 1.02-.2 1.41-.59l7.78-7.78 2.81-2.81c.8-.78.8-2.07 0-2.86zM5.41 20L4 18.59l7.72-7.72 1.47 1.35L5.41 20z\"/>\n",
+              "  </svg>\n",
+              "      </button>\n",
+              "      \n",
+              "  <style>\n",
+              "    .colab-df-container {\n",
+              "      display:flex;\n",
+              "      flex-wrap:wrap;\n",
+              "      gap: 12px;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-convert {\n",
+              "      background-color: #E8F0FE;\n",
+              "      border: none;\n",
+              "      border-radius: 50%;\n",
+              "      cursor: pointer;\n",
+              "      display: none;\n",
+              "      fill: #1967D2;\n",
+              "      height: 32px;\n",
+              "      padding: 0 0 0 0;\n",
+              "      width: 32px;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-convert:hover {\n",
+              "      background-color: #E2EBFA;\n",
+              "      box-shadow: 0px 1px 2px rgba(60, 64, 67, 0.3), 0px 1px 3px 1px rgba(60, 64, 67, 0.15);\n",
+              "      fill: #174EA6;\n",
+              "    }\n",
+              "\n",
+              "    [theme=dark] .colab-df-convert {\n",
+              "      background-color: #3B4455;\n",
+              "      fill: #D2E3FC;\n",
+              "    }\n",
+              "\n",
+              "    [theme=dark] .colab-df-convert:hover {\n",
+              "      background-color: #434B5C;\n",
+              "      box-shadow: 0px 1px 3px 1px rgba(0, 0, 0, 0.15);\n",
+              "      filter: drop-shadow(0px 1px 2px rgba(0, 0, 0, 0.3));\n",
+              "      fill: #FFFFFF;\n",
+              "    }\n",
+              "  </style>\n",
+              "\n",
+              "      <script>\n",
+              "        const buttonEl =\n",
+              "          document.querySelector('#df-e88a1279-1896-4e5a-8ac3-b4ad89ef26d6 button.colab-df-convert');\n",
+              "        buttonEl.style.display =\n",
+              "          google.colab.kernel.accessAllowed ? 'block' : 'none';\n",
+              "\n",
+              "        async function convertToInteractive(key) {\n",
+              "          const element = document.querySelector('#df-e88a1279-1896-4e5a-8ac3-b4ad89ef26d6');\n",
+              "          const dataTable =\n",
+              "            await google.colab.kernel.invokeFunction('convertToInteractive',\n",
+              "                                                     [key], {});\n",
+              "          if (!dataTable) return;\n",
+              "\n",
+              "          const docLinkHtml = 'Like what you see? Visit the ' +\n",
+              "            '<a target=\"_blank\" href=https://colab.research.google.com/notebooks/data_table.ipynb>data table notebook</a>'\n",
+              "            + ' to learn more about interactive tables.';\n",
+              "          element.innerHTML = '';\n",
+              "          dataTable['output_type'] = 'display_data';\n",
+              "          await google.colab.output.renderOutput(dataTable, element);\n",
+              "          const docLink = document.createElement('div');\n",
+              "          docLink.innerHTML = docLinkHtml;\n",
+              "          element.appendChild(docLink);\n",
+              "        }\n",
+              "      </script>\n",
+              "    </div>\n",
+              "  </div>\n",
+              "  "
+            ]
+          },
+          "metadata": {},
+          "execution_count": 32
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Observation\n",
+        "\n",
+        "We have almost 86% decrease in model size with minimal loss in accuracy.\n",
+        "\n",
+        "\n",
+        "\n",
+        "| Base model | Iteratively pruned model|\n",
+        "|------------|------------|\n",
+        "| - Overall accuracy: 82.63%| - Overall accuracy: 82.63% (higher accuracy)|\n",
+        "| - Overall model size: 647.98 MB | - Overall model size: 89.66 MB (smaller size)|\n",
+        "| - Overall Inference time: 4.55 s | - Overall Inference time: 3.28 s (lower inference time)|\n",
+        "| - Performance: Lower| - Performance: Higher|\n",
+        "| - Key: It has a larger model size compared to iterative pruning,| - Key: Iterative pruning proves that we can fine tune our sparsity level, |\n",
+        "|  and significanlty has higher inference time.| while maintaining our accuracy and inference time.|"
+      ],
+      "metadata": {
+        "id": "q4nPcgol6KdF"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "pruned_evulation_df"
+      ],
+      "metadata": {
+        "id": "dDxsNF8fjYxH",
+        "outputId": "4aa7f36c-a3af-4de2-bcb5-0f5b604b0f7d",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 238
+        }
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "               index                      0\n",
+              "0    Evaluation type             Evualation\n",
+              "1  Model Information                     #1\n",
+              "2           Accuracy    94.09722089767456 %\n",
+              "3               Loss   54.101359844207764 %\n",
+              "4         Model Size         89648959 bytes\n",
+              "5     Inference Time  9.117764472961426 sec"
+            ],
+            "text/html": [
+              "\n",
+              "  <div id=\"df-c90dddbb-c1a4-4733-8ed8-528509845751\">\n",
+              "    <div class=\"colab-df-container\">\n",
+              "      <div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>index</th>\n",
+              "      <th>0</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>Evaluation type</td>\n",
+              "      <td>Evualation</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>Model Information</td>\n",
+              "      <td>#1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>Accuracy</td>\n",
+              "      <td>94.09722089767456 %</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>Loss</td>\n",
+              "      <td>54.101359844207764 %</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>4</th>\n",
+              "      <td>Model Size</td>\n",
+              "      <td>89648959 bytes</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>5</th>\n",
+              "      <td>Inference Time</td>\n",
+              "      <td>9.117764472961426 sec</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>\n",
+              "      <button class=\"colab-df-convert\" onclick=\"convertToInteractive('df-c90dddbb-c1a4-4733-8ed8-528509845751')\"\n",
+              "              title=\"Convert this dataframe to an interactive table.\"\n",
+              "              style=\"display:none;\">\n",
+              "        \n",
+              "  <svg xmlns=\"http://www.w3.org/2000/svg\" height=\"24px\"viewBox=\"0 0 24 24\"\n",
+              "       width=\"24px\">\n",
+              "    <path d=\"M0 0h24v24H0V0z\" fill=\"none\"/>\n",
+              "    <path d=\"M18.56 5.44l.94 2.06.94-2.06 2.06-.94-2.06-.94-.94-2.06-.94 2.06-2.06.94zm-11 1L8.5 8.5l.94-2.06 2.06-.94-2.06-.94L8.5 2.5l-.94 2.06-2.06.94zm10 10l.94 2.06.94-2.06 2.06-.94-2.06-.94-.94-2.06-.94 2.06-2.06.94z\"/><path d=\"M17.41 7.96l-1.37-1.37c-.4-.4-.92-.59-1.43-.59-.52 0-1.04.2-1.43.59L10.3 9.45l-7.72 7.72c-.78.78-.78 2.05 0 2.83L4 21.41c.39.39.9.59 1.41.59.51 0 1.02-.2 1.41-.59l7.78-7.78 2.81-2.81c.8-.78.8-2.07 0-2.86zM5.41 20L4 18.59l7.72-7.72 1.47 1.35L5.41 20z\"/>\n",
+              "  </svg>\n",
+              "      </button>\n",
+              "      \n",
+              "  <style>\n",
+              "    .colab-df-container {\n",
+              "      display:flex;\n",
+              "      flex-wrap:wrap;\n",
+              "      gap: 12px;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-convert {\n",
+              "      background-color: #E8F0FE;\n",
+              "      border: none;\n",
+              "      border-radius: 50%;\n",
+              "      cursor: pointer;\n",
+              "      display: none;\n",
+              "      fill: #1967D2;\n",
+              "      height: 32px;\n",
+              "      padding: 0 0 0 0;\n",
+              "      width: 32px;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-convert:hover {\n",
+              "      background-color: #E2EBFA;\n",
+              "      box-shadow: 0px 1px 2px rgba(60, 64, 67, 0.3), 0px 1px 3px 1px rgba(60, 64, 67, 0.15);\n",
+              "      fill: #174EA6;\n",
+              "    }\n",
+              "\n",
+              "    [theme=dark] .colab-df-convert {\n",
+              "      background-color: #3B4455;\n",
+              "      fill: #D2E3FC;\n",
+              "    }\n",
+              "\n",
+              "    [theme=dark] .colab-df-convert:hover {\n",
+              "      background-color: #434B5C;\n",
+              "      box-shadow: 0px 1px 3px 1px rgba(0, 0, 0, 0.15);\n",
+              "      filter: drop-shadow(0px 1px 2px rgba(0, 0, 0, 0.3));\n",
+              "      fill: #FFFFFF;\n",
+              "    }\n",
+              "  </style>\n",
+              "\n",
+              "      <script>\n",
+              "        const buttonEl =\n",
+              "          document.querySelector('#df-c90dddbb-c1a4-4733-8ed8-528509845751 button.colab-df-convert');\n",
+              "        buttonEl.style.display =\n",
+              "          google.colab.kernel.accessAllowed ? 'block' : 'none';\n",
+              "\n",
+              "        async function convertToInteractive(key) {\n",
+              "          const element = document.querySelector('#df-c90dddbb-c1a4-4733-8ed8-528509845751');\n",
+              "          const dataTable =\n",
+              "            await google.colab.kernel.invokeFunction('convertToInteractive',\n",
+              "                                                     [key], {});\n",
+              "          if (!dataTable) return;\n",
+              "\n",
+              "          const docLinkHtml = 'Like what you see? Visit the ' +\n",
+              "            '<a target=\"_blank\" href=https://colab.research.google.com/notebooks/data_table.ipynb>data table notebook</a>'\n",
+              "            + ' to learn more about interactive tables.';\n",
+              "          element.innerHTML = '';\n",
+              "          dataTable['output_type'] = 'display_data';\n",
+              "          await google.colab.output.renderOutput(dataTable, element);\n",
+              "          const docLink = document.createElement('div');\n",
+              "          docLink.innerHTML = docLinkHtml;\n",
+              "          element.appendChild(docLink);\n",
+              "        }\n",
+              "      </script>\n",
+              "    </div>\n",
+              "  </div>\n",
+              "  "
+            ]
+          },
+          "metadata": {},
+          "execution_count": 58
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Quantization"
+      ],
+      "metadata": {
+        "id": "TFNqDAak5AFg"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# A helper function to evaluate the TF Lite model using \"test\" dataset.\n",
+        "def evaluate_model_2(interpreter, model_path):\n",
+        "  input_index = interpreter.get_input_details()[0][\"index\"]\n",
+        "  output_index = interpreter.get_output_details()[0][\"index\"]\n",
+        "\n",
+        "  input_details = interpreter.get_input_details()\n",
+        "\n",
+        "  # Run predictions on every image in the \"test\" dataset.\n",
+        "  prediction_digits = []\n",
+        "  # for test_image in test_images:\n",
+        "  for images, labels in input_data.unbatch().batch(1):\n",
+        "    # Pre-processing: add batch dimension and convert to float32 to match with\n",
+        "    # the model's input data format.\n",
+        "    # test_image = np.expand_dims(test_image, axis=0).astype(np.float32)\n",
+        "    interpreter.set_tensor(input_details[0]['index'], images)\n",
+        "\n",
+        "    # interpreter.set_tensor(input_index, images)\n",
+        "\n",
+        "    # Run inference.\n",
+        "    startTime = time.time()\n",
+        "    interpreter.invoke()\n",
+        "    executionTime = (time.time() - startTime)/len(images)\n",
+        "\n",
+        "    # Post-processing: remove batch dimension and find the digit with highest\n",
+        "    # probability.\n",
+        "    output = interpreter.tensor(output_index)\n",
+        "    digit = np.argmax(output()[0])\n",
+        "    prediction_digits.append(digit)\n",
+        "\n",
+        "  # Compare prediction results with ground truth labels to calculate accuracy.\n",
+        "  accurate_count = 0\n",
+        "  for index in range(len(prediction_digits)):\n",
+        "    if prediction_digits[index] == labels:\n",
+        "      accurate_count += 1\n",
+        "  accuracy = accurate_count * 1.0 / len(prediction_digits)\n",
+        "\n",
+        "  model_size = get_gzipped_model_size(model_path)\n",
+        "  # Print\n",
+        "  print('\\nModel Accuracy:', accuracy*100, '%')\n",
+        "  print(\"Model Size: %.2f bytes\" % (model_size))\n",
+        "  print(\"Inference Time is: \", executionTime, \"s\")\n",
+        "\n",
+        "\n",
+        "  # Build Evalution dataframe\n",
+        "  evulation_dict = {\n",
+        "                      \"Evaluation type\": \"Evualation\",\n",
+        "                      \"Accuracy\": str(accuracy*100) + \" %\",\n",
+        "                      \"Model Size\": str(float(model_size)/10**6) + \" Mega bytes\", # we want mega bytes\n",
+        "                      \"Inference Time\": str(executionTime) + \" sec\"\n",
+        "                    }\n",
+        "  \n",
+        "  evulation_df = pd.DataFrame.from_dict(evulation_dict, orient='index').reset_index()\n",
+        "\n",
+        "\n",
+        "  return evulation_df"
+      ],
+      "metadata": {
+        "id": "bB6tHpZq7TSw"
+      },
+      "execution_count": 40,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "converter = tf.lite.TFLiteConverter.from_keras_model(base_model)\n",
+        "converter.optimizations = [tf.lite.Optimize.DEFAULT]\n",
+        "converter.target_spec.supported_types = [tf.float16]\n",
+        "fp16_quantized_tflite_base_model = converter.convert()"
+      ],
+      "metadata": {
+        "id": "6b44dStg5B4y",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "32a6c017-0eba-4d6e-fcc8-7487f25abc8f"
+      },
+      "execution_count": 20,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "WARNING:absl:Found untraced functions such as _jit_compiled_convolution_op, _jit_compiled_convolution_op, _jit_compiled_convolution_op, _jit_compiled_convolution_op, _jit_compiled_convolution_op while saving (showing 5 of 6). These functions will not be directly callable after loading.\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "converter = tf.lite.TFLiteConverter.from_keras_model(iteratively_pruned_model)\n",
+        "converter.optimizations = [tf.lite.Optimize.DEFAULT]\n",
+        "converter.target_spec.supported_types = [tf.float16]\n",
+        "fp16_quantized_tflite_iteratively_pruned_model = converter.convert()"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "9xmdth3nVmsM",
+        "outputId": "eaf57b92-13a5-422a-c847-b57deb95bf03"
+      },
+      "execution_count": 21,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "WARNING:absl:Found untraced functions such as conv2d_layer_call_fn, conv2d_layer_call_and_return_conditional_losses, _jit_compiled_convolution_op, conv2d_1_layer_call_fn, conv2d_1_layer_call_and_return_conditional_losses while saving (showing 5 of 27). These functions will not be directly callable after loading.\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "with open('fp16_quantized_tflite_base_model.tflite', 'wb') as f:\n",
+        "  f.write(fp16_quantized_tflite_base_model)\n",
+        "interpreter_fp16_quant_base_model = tf.lite.Interpreter(model_path=str('fp16_quantized_tflite_base_model.tflite'))\n",
+        "interpreter_fp16_quant_base_model.allocate_tensors()"
+      ],
+      "metadata": {
+        "id": "ywgGLznW6_uO"
+      },
+      "execution_count": 22,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "with open('fp16_quantized_tflite_iteratively_pruned_model.tflite', 'wb') as f:\n",
+        "  f.write(fp16_quantized_tflite_iteratively_pruned_model)\n",
+        "interpreter_fp16_quant_iteratively_pruned_model = tf.lite.Interpreter(model_path=str('fp16_quantized_tflite_iteratively_pruned_model.tflite'))\n",
+        "interpreter_fp16_quant_iteratively_pruned_model.allocate_tensors()"
+      ],
+      "metadata": {
+        "id": "KE7gHp8_VrX8"
+      },
+      "execution_count": 23,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "input_data = val_dataset"
+      ],
+      "metadata": {
+        "id": "Im0t9aTeQCVB"
+      },
+      "execution_count": 24,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "quantized_tflite_base_model_evulation_df = evaluate_model_2(interpreter_fp16_quant_base_model, 'fp16_quantized_tflite_base_model.tflite')"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "UAfpGv2AnoaK",
+        "outputId": "65460ea5-e3ba-4162-e6cf-fa03c68930b1"
+      },
+      "execution_count": 41,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\n",
+            "Model Accuracy: 100.0 %\n",
+            "Model Size: 50241397.00 bytes\n",
+            "Inference Time is:  0.07050800323486328 s\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "quantized_tflite_base_model_evulation_df"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 175
+        },
+        "id": "iSYqwN8U5vkr",
+        "outputId": "fbd54728-3e58-498d-e1cc-aa634b7fe609"
+      },
+      "execution_count": 42,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "             index                        0\n",
+              "0  Evaluation type               Evualation\n",
+              "1         Accuracy                  100.0 %\n",
+              "2       Model Size     50.241397 Mega bytes\n",
+              "3   Inference Time  0.07050800323486328 sec"
+            ],
+            "text/html": [
+              "\n",
+              "  <div id=\"df-b01478b6-0d8e-4a71-b6a5-2fe35054c095\">\n",
+              "    <div class=\"colab-df-container\">\n",
+              "      <div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>index</th>\n",
+              "      <th>0</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>Evaluation type</td>\n",
+              "      <td>Evualation</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>Accuracy</td>\n",
+              "      <td>100.0 %</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>Model Size</td>\n",
+              "      <td>50.241397 Mega bytes</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>Inference Time</td>\n",
+              "      <td>0.07050800323486328 sec</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>\n",
+              "      <button class=\"colab-df-convert\" onclick=\"convertToInteractive('df-b01478b6-0d8e-4a71-b6a5-2fe35054c095')\"\n",
+              "              title=\"Convert this dataframe to an interactive table.\"\n",
+              "              style=\"display:none;\">\n",
+              "        \n",
+              "  <svg xmlns=\"http://www.w3.org/2000/svg\" height=\"24px\"viewBox=\"0 0 24 24\"\n",
+              "       width=\"24px\">\n",
+              "    <path d=\"M0 0h24v24H0V0z\" fill=\"none\"/>\n",
+              "    <path d=\"M18.56 5.44l.94 2.06.94-2.06 2.06-.94-2.06-.94-.94-2.06-.94 2.06-2.06.94zm-11 1L8.5 8.5l.94-2.06 2.06-.94-2.06-.94L8.5 2.5l-.94 2.06-2.06.94zm10 10l.94 2.06.94-2.06 2.06-.94-2.06-.94-.94-2.06-.94 2.06-2.06.94z\"/><path d=\"M17.41 7.96l-1.37-1.37c-.4-.4-.92-.59-1.43-.59-.52 0-1.04.2-1.43.59L10.3 9.45l-7.72 7.72c-.78.78-.78 2.05 0 2.83L4 21.41c.39.39.9.59 1.41.59.51 0 1.02-.2 1.41-.59l7.78-7.78 2.81-2.81c.8-.78.8-2.07 0-2.86zM5.41 20L4 18.59l7.72-7.72 1.47 1.35L5.41 20z\"/>\n",
+              "  </svg>\n",
+              "      </button>\n",
+              "      \n",
+              "  <style>\n",
+              "    .colab-df-container {\n",
+              "      display:flex;\n",
+              "      flex-wrap:wrap;\n",
+              "      gap: 12px;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-convert {\n",
+              "      background-color: #E8F0FE;\n",
+              "      border: none;\n",
+              "      border-radius: 50%;\n",
+              "      cursor: pointer;\n",
+              "      display: none;\n",
+              "      fill: #1967D2;\n",
+              "      height: 32px;\n",
+              "      padding: 0 0 0 0;\n",
+              "      width: 32px;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-convert:hover {\n",
+              "      background-color: #E2EBFA;\n",
+              "      box-shadow: 0px 1px 2px rgba(60, 64, 67, 0.3), 0px 1px 3px 1px rgba(60, 64, 67, 0.15);\n",
+              "      fill: #174EA6;\n",
+              "    }\n",
+              "\n",
+              "    [theme=dark] .colab-df-convert {\n",
+              "      background-color: #3B4455;\n",
+              "      fill: #D2E3FC;\n",
+              "    }\n",
+              "\n",
+              "    [theme=dark] .colab-df-convert:hover {\n",
+              "      background-color: #434B5C;\n",
+              "      box-shadow: 0px 1px 3px 1px rgba(0, 0, 0, 0.15);\n",
+              "      filter: drop-shadow(0px 1px 2px rgba(0, 0, 0, 0.3));\n",
+              "      fill: #FFFFFF;\n",
+              "    }\n",
+              "  </style>\n",
+              "\n",
+              "      <script>\n",
+              "        const buttonEl =\n",
+              "          document.querySelector('#df-b01478b6-0d8e-4a71-b6a5-2fe35054c095 button.colab-df-convert');\n",
+              "        buttonEl.style.display =\n",
+              "          google.colab.kernel.accessAllowed ? 'block' : 'none';\n",
+              "\n",
+              "        async function convertToInteractive(key) {\n",
+              "          const element = document.querySelector('#df-b01478b6-0d8e-4a71-b6a5-2fe35054c095');\n",
+              "          const dataTable =\n",
+              "            await google.colab.kernel.invokeFunction('convertToInteractive',\n",
+              "                                                     [key], {});\n",
+              "          if (!dataTable) return;\n",
+              "\n",
+              "          const docLinkHtml = 'Like what you see? Visit the ' +\n",
+              "            '<a target=\"_blank\" href=https://colab.research.google.com/notebooks/data_table.ipynb>data table notebook</a>'\n",
+              "            + ' to learn more about interactive tables.';\n",
+              "          element.innerHTML = '';\n",
+              "          dataTable['output_type'] = 'display_data';\n",
+              "          await google.colab.output.renderOutput(dataTable, element);\n",
+              "          const docLink = document.createElement('div');\n",
+              "          docLink.innerHTML = docLinkHtml;\n",
+              "          element.appendChild(docLink);\n",
+              "        }\n",
+              "      </script>\n",
+              "    </div>\n",
+              "  </div>\n",
+              "  "
+            ]
+          },
+          "metadata": {},
+          "execution_count": 42
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "quantized_tflite_iteratively_pruned_model_evulation_df = evaluate_model_2(interpreter_fp16_quant_iteratively_pruned_model, 'fp16_quantized_tflite_iteratively_pruned_model.tflite')"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "7tLNtbLsnsmv",
+        "outputId": "ee29d040-2eff-4196-9c67-22a1cd06fc28"
+      },
+      "execution_count": 45,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\n",
+            "Model Accuracy: 100.0 %\n",
+            "Model Size: 61294937.00 bytes\n",
+            "Inference Time is:  0.3843374252319336 s\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "quantized_tflite_iteratively_pruned_model_evulation_df"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 175
+        },
+        "id": "KyATI6_N50jo",
+        "outputId": "dc5e6650-3146-4c9e-eefd-c287316e9b3b"
+      },
+      "execution_count": 46,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "             index                       0\n",
+              "0  Evaluation type              Evualation\n",
+              "1         Accuracy                 100.0 %\n",
+              "2       Model Size    61.294937 Mega bytes\n",
+              "3   Inference Time  0.3843374252319336 sec"
+            ],
+            "text/html": [
+              "\n",
+              "  <div id=\"df-44a1d153-526c-4d57-9de4-ee57d4a592c4\">\n",
+              "    <div class=\"colab-df-container\">\n",
+              "      <div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>index</th>\n",
+              "      <th>0</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>Evaluation type</td>\n",
+              "      <td>Evualation</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>Accuracy</td>\n",
+              "      <td>100.0 %</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>Model Size</td>\n",
+              "      <td>61.294937 Mega bytes</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>Inference Time</td>\n",
+              "      <td>0.3843374252319336 sec</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>\n",
+              "      <button class=\"colab-df-convert\" onclick=\"convertToInteractive('df-44a1d153-526c-4d57-9de4-ee57d4a592c4')\"\n",
+              "              title=\"Convert this dataframe to an interactive table.\"\n",
+              "              style=\"display:none;\">\n",
+              "        \n",
+              "  <svg xmlns=\"http://www.w3.org/2000/svg\" height=\"24px\"viewBox=\"0 0 24 24\"\n",
+              "       width=\"24px\">\n",
+              "    <path d=\"M0 0h24v24H0V0z\" fill=\"none\"/>\n",
+              "    <path d=\"M18.56 5.44l.94 2.06.94-2.06 2.06-.94-2.06-.94-.94-2.06-.94 2.06-2.06.94zm-11 1L8.5 8.5l.94-2.06 2.06-.94-2.06-.94L8.5 2.5l-.94 2.06-2.06.94zm10 10l.94 2.06.94-2.06 2.06-.94-2.06-.94-.94-2.06-.94 2.06-2.06.94z\"/><path d=\"M17.41 7.96l-1.37-1.37c-.4-.4-.92-.59-1.43-.59-.52 0-1.04.2-1.43.59L10.3 9.45l-7.72 7.72c-.78.78-.78 2.05 0 2.83L4 21.41c.39.39.9.59 1.41.59.51 0 1.02-.2 1.41-.59l7.78-7.78 2.81-2.81c.8-.78.8-2.07 0-2.86zM5.41 20L4 18.59l7.72-7.72 1.47 1.35L5.41 20z\"/>\n",
+              "  </svg>\n",
+              "      </button>\n",
+              "      \n",
+              "  <style>\n",
+              "    .colab-df-container {\n",
+              "      display:flex;\n",
+              "      flex-wrap:wrap;\n",
+              "      gap: 12px;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-convert {\n",
+              "      background-color: #E8F0FE;\n",
+              "      border: none;\n",
+              "      border-radius: 50%;\n",
+              "      cursor: pointer;\n",
+              "      display: none;\n",
+              "      fill: #1967D2;\n",
+              "      height: 32px;\n",
+              "      padding: 0 0 0 0;\n",
+              "      width: 32px;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-convert:hover {\n",
+              "      background-color: #E2EBFA;\n",
+              "      box-shadow: 0px 1px 2px rgba(60, 64, 67, 0.3), 0px 1px 3px 1px rgba(60, 64, 67, 0.15);\n",
+              "      fill: #174EA6;\n",
+              "    }\n",
+              "\n",
+              "    [theme=dark] .colab-df-convert {\n",
+              "      background-color: #3B4455;\n",
+              "      fill: #D2E3FC;\n",
+              "    }\n",
+              "\n",
+              "    [theme=dark] .colab-df-convert:hover {\n",
+              "      background-color: #434B5C;\n",
+              "      box-shadow: 0px 1px 3px 1px rgba(0, 0, 0, 0.15);\n",
+              "      filter: drop-shadow(0px 1px 2px rgba(0, 0, 0, 0.3));\n",
+              "      fill: #FFFFFF;\n",
+              "    }\n",
+              "  </style>\n",
+              "\n",
+              "      <script>\n",
+              "        const buttonEl =\n",
+              "          document.querySelector('#df-44a1d153-526c-4d57-9de4-ee57d4a592c4 button.colab-df-convert');\n",
+              "        buttonEl.style.display =\n",
+              "          google.colab.kernel.accessAllowed ? 'block' : 'none';\n",
+              "\n",
+              "        async function convertToInteractive(key) {\n",
+              "          const element = document.querySelector('#df-44a1d153-526c-4d57-9de4-ee57d4a592c4');\n",
+              "          const dataTable =\n",
+              "            await google.colab.kernel.invokeFunction('convertToInteractive',\n",
+              "                                                     [key], {});\n",
+              "          if (!dataTable) return;\n",
+              "\n",
+              "          const docLinkHtml = 'Like what you see? Visit the ' +\n",
+              "            '<a target=\"_blank\" href=https://colab.research.google.com/notebooks/data_table.ipynb>data table notebook</a>'\n",
+              "            + ' to learn more about interactive tables.';\n",
+              "          element.innerHTML = '';\n",
+              "          dataTable['output_type'] = 'display_data';\n",
+              "          await google.colab.output.renderOutput(dataTable, element);\n",
+              "          const docLink = document.createElement('div');\n",
+              "          docLink.innerHTML = docLinkHtml;\n",
+              "          element.appendChild(docLink);\n",
+              "        }\n",
+              "      </script>\n",
+              "    </div>\n",
+              "  </div>\n",
+              "  "
+            ]
+          },
+          "metadata": {},
+          "execution_count": 46
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Observation\n",
+        "\n"
+      ],
+      "metadata": {
+        "id": "oydlGRgg6-HQ"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Get input and output tensors.\n",
+        "input_details = interpreter_1.get_input_details()\n",
+        "output_details = interpreter_1.get_output_details()\n",
+        "\n",
+        "# Test the model on input data.\n",
+        "for images, labels in input_data.unbatch().batch(1):\n",
+        "  interpreter_1.set_tensor(input_details[0]['index'], images)\n",
+        "  interpreter_1.invoke()\n",
+        "\n",
+        "  # Get the result.\n",
+        "  output_data = interpreter_1.get_tensor(output_details[0]['index'])\n",
+        "\n",
+        "  # Calculate accuracy\n",
+        "  accuracy = np.mean(np.argmax(output_data, axis=1) == np.argmax(labels, axis=1))\n",
+        "\n",
+        "  print(accuracy)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "Nkxkzar0P_0H",
+        "outputId": "00ba7db9-dd1e-44ee-aa94-ad961e301f75"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n",
+            "1.0\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "interpreter_fp16_quant.get_input_details()"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "SS1xovAHLLNr",
+        "outputId": "42d65ecc-7c4e-4215-8706-c57b37437944"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "[{'name': 'serving_default_input_3:0',\n",
+              "  'index': 0,\n",
+              "  'shape': array([  1, 227, 227,   3], dtype=int32),\n",
+              "  'shape_signature': array([ -1, 227, 227,   3], dtype=int32),\n",
+              "  'dtype': numpy.float32,\n",
+              "  'quantization': (0.0, 0),\n",
+              "  'quantization_parameters': {'scales': array([], dtype=float32),\n",
+              "   'zero_points': array([], dtype=int32),\n",
+              "   'quantized_dimension': 0},\n",
+              "  'sparsity_parameters': {}}]"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 87
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "interpreter_fp16_quant.get_output_details()"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "A6MCC7GJLvX1",
+        "outputId": "cc06404a-30ad-491d-cd88-de5d6c06a8f2"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "[{'name': 'StatefulPartitionedCall:0',\n",
+              "  'index': 76,\n",
+              "  'shape': array([1, 1], dtype=int32),\n",
+              "  'shape_signature': array([-1,  1], dtype=int32),\n",
+              "  'dtype': numpy.float32,\n",
+              "  'quantization': (0.0, 0),\n",
+              "  'quantization_parameters': {'scales': array([], dtype=float32),\n",
+              "   'zero_points': array([], dtype=int32),\n",
+              "   'quantized_dimension': 0},\n",
+              "  'sparsity_parameters': {}}]"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 88
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "i = interpreter_fp16_quant.tensor(interpreter_fp16_quant.get_input_details()[0][\"index\"])\n",
+        "i"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "l2NeClJOMTli",
+        "outputId": "f944a6a2-2a95-4cbf-e146-d05854f53122"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "<function tensorflow.lite.python.interpreter.Interpreter.tensor.<locals>.<lambda>()>"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 96
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "i()"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "mLbm32VhMyZb",
+        "outputId": "4ba1b03f-5512-44a9-9c6f-39e1e12db64f"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "array([[[[3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         ...,\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.]],\n",
+              "\n",
+              "        [[3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         ...,\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.]],\n",
+              "\n",
+              "        [[3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         ...,\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.]],\n",
+              "\n",
+              "        ...,\n",
+              "\n",
+              "        [[3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         ...,\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.]],\n",
+              "\n",
+              "        [[3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         ...,\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.]],\n",
+              "\n",
+              "        [[3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         ...,\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.],\n",
+              "         [3., 3., 3.]]]], dtype=float32)"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 97
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "interpreter_fp16_quant.set_tensor(interpreter_fp16_quant.get_input_details()[0][\"index\"], input_data)"
+      ],
+      "metadata": {
+        "id": "XvtWZxxuMNNX"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "qO4A58Q77JNL",
+        "outputId": "0600aed3-9db3-4f6f-d17d-36b4dabc243f"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\n",
+            "Model Accuracy: 100.0 %\n",
+            "Model Size: 105141608.00 bytes\n",
+            "Inference Time is:  0.07761645317077637 s\n"
+          ]
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "(1.0, 105141608, 0.07761645317077637)"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 37
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        " "
+      ],
+      "metadata": {
+        "id": "y4dQBSijKRrg"
+      },
+      "execution_count": null,
+      "outputs": []
+    }
+  ],
+  "metadata": {
+    "accelerator": "GPU",
+    "colab": {
+      "provenance": [],
+      "toc_visible": true,
+      "include_colab_link": true
+    },
+    "gpuClass": "standard",
+    "kernelspec": {
+      "display_name": "Python 3",
+      "name": "python3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 0
+}
